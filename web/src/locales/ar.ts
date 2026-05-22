@@ -1265,6 +1265,8 @@ export default {
         selectBackend: 'حدد المعالجة الخلفية',
         backendOptions: {
           pipeline: 'معالجة خطوط الأنابيب القياسية',
+          hybridAutoEngine: 'Hybrid Pipeline + VLM (Auto Engine)',
+          hybridHttpClient: 'Hybrid Pipeline + VLM via HTTP Client',
           vlmTransformers: 'نموذج لغة الرؤية مع المحولات',
           vlmVllmEngine: 'نموذج لغة الرؤية مع محرك vLLM',
           vlmHttpClient: 'نموذج لغة الرؤية عبر عميل HTTP',

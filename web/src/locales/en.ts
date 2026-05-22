@@ -1645,6 +1645,8 @@ Example: Virtual Hosted Style`,
         selectBackend: 'Select processing backend',
         backendOptions: {
           pipeline: 'Standard Pipeline Processing',
+          hybridAutoEngine: 'Hybrid Pipeline + VLM (Auto Engine)',
+          hybridHttpClient: 'Hybrid Pipeline + VLM via HTTP Client',
           vlmTransformers: 'Vision Language Model with Transformers',
           vlmVllmEngine: 'Vision Language Model with vLLM Engine',
           vlmHttpClient: 'Vision Language Model via HTTP Client',

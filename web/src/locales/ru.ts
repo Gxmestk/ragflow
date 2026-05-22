@@ -1430,6 +1430,8 @@ export default {
         selectBackend: 'Выберите бэкенд обработки',
         backendOptions: {
           pipeline: 'Стандартный конвейер обработки',
+          hybridAutoEngine: 'Hybrid Pipeline + VLM (Auto Engine)',
+          hybridHttpClient: 'Hybrid Pipeline + VLM via HTTP Client',
           vlmTransformers: 'Vision Language Model с Transformers',
           vlmVllmEngine: 'Vision Language Model с движком vLLM',
           vlmHttpClient: 'Vision Language Model через HTTP-клиент',

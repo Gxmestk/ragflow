@@ -32,6 +32,8 @@ const FormSchema = z.object({
   mineru_output_dir: z.string().optional(),
   mineru_backend: z.enum([
     'pipeline',
+    'hybrid-auto-engine',
+    'hybrid-http-client',
     'vlm-transformers',
     'vlm-vllm-engine',
     'vlm-http-client',
@@ -60,6 +62,8 @@ const MinerUModal = ({
 
   const backendOptions = buildOptions([
     'pipeline',
+    'hybrid-auto-engine',
+    'hybrid-http-client',
     'vlm-transformers',
     'vlm-vllm-engine',
     'vlm-http-client',
@@ -131,7 +135,10 @@ const MinerUModal = ({
                   value={field.value}
                   onChange={(value) => {
                     field.onChange(value);
-                    if (value !== 'vlm-http-client') {
+                    if (
+                      value !== 'vlm-http-client' &&
+                      value !== 'hybrid-http-client'
+                    ) {
                       form.setValue('mineru_server_url', undefined);
                     }
                   }}
@@ -140,7 +147,8 @@ const MinerUModal = ({
                 />
               )}
             </RAGFlowFormItem>
-            {backend === 'vlm-http-client' && (
+            {(backend === 'vlm-http-client' ||
+              backend === 'hybrid-http-client') && (
               <RAGFlowFormItem
                 name="mineru_server_url"
                 label={t('setting.mineru.serverUrl')}

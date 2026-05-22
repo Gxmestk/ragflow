@@ -700,7 +700,10 @@ export const useSubmitMinerU = () => {
         mineru_delete_output:
           (payload.mineru_delete_output ?? true) ? '1' : '0',
       };
-      if (payload.mineru_backend !== 'vlm-http-client') {
+      if (
+        payload.mineru_backend !== 'vlm-http-client' &&
+        payload.mineru_backend !== 'hybrid-http-client'
+      ) {
         delete cfg.mineru_server_url;
       }
       const req: IAddLlmRequestBody = {

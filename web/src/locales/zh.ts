@@ -1338,6 +1338,8 @@ NER：使用 spaCy NER 和基于规则的关键词提取来抽取实体和关系
         selectBackend: '选择处理后端',
         backendOptions: {
           pipeline: '标准流水线处理',
+          hybridAutoEngine: '混合流水线 + VLM（自动引擎）',
+          hybridHttpClient: '混合流水线 + VLM（HTTP 客户端）',
           vlmTransformers: '基于Transformers的视觉语言模型',
           vlmVllmEngine: '基于vLLM引擎的视觉语言模型',
           vlmHttpClient: '通过HTTP客户端连接的视觉语言模型',

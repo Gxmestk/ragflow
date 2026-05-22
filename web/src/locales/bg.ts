@@ -1322,6 +1322,8 @@ The above is the content you need to summarize.`,
         selectBackend: 'Изберете обработващ backend',
         backendOptions: {
           pipeline: 'Стандартна конвейерна обработка',
+          hybridAutoEngine: 'Hybrid Pipeline + VLM (Auto Engine)',
+          hybridHttpClient: 'Hybrid Pipeline + VLM via HTTP Client',
           vlmTransformers: 'Vision Language Model с Transformers',
           vlmVllmEngine: 'Vision Language Model с vLLM Engine',
           vlmHttpClient: 'Vision Language Model чрез HTTP Client',
