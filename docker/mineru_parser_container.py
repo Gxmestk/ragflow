@@ -85,6 +85,8 @@ class MinerUBackend(StrEnum):
     """MinerU processing backend options."""
 
     PIPELINE = "pipeline"  # Traditional multimodel pipeline (default)
+    HYBRID_AUTO_ENGINE = "hybrid-auto-engine"  # Pipeline + VLM auto-detected per page
+    HYBRID_HTTP_CLIENT = "hybrid-http-client"  # Pipeline + remote VLM via HTTP
     VLM_TRANSFORMERS = "vlm-transformers"  # Vision-language model using HuggingFace Transformers
     VLM_MLX_ENGINE = "vlm-mlx-engine"  # Faster, requires Apple Silicon and macOS 13.5+
     VLM_VLLM_ENGINE = "vlm-vllm-engine"  # Local vLLM engine, requires local GPU
