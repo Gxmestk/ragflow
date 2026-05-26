@@ -43,6 +43,7 @@ services:
       # - ./nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./service_conf.yaml.template:/ragflow/conf/service_conf.yaml.template
       - ./entrypoint.sh:/ragflow/entrypoint.sh
+      - ./mineru_parser_container.py:/ragflow/deepdoc/parser/mineru_parser.py
     env_file: .env
     networks:
       - ragflow
@@ -91,11 +92,12 @@ services:
       # - ./nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./service_conf.yaml.template:/ragflow/conf/service_conf.yaml.template
       - ./entrypoint.sh:/ragflow/entrypoint.sh
+      - ./mineru_parser_container.py:/ragflow/deepdoc/parser/mineru_parser.py
     env_file: .env
     networks:
       - ragflow
     restart: unless-stopped
-    # https://docs.docker.com/engine/daemon/prometheus/#create-a-prometheus-configuration
+    # https://docs.docker.com/engine/daemon/prometheus/#create-a-prometheus_
     # If you use Docker Desktop, the --add-host flag is optional. This flag ensures that the host's internal IP is exposed to the Prometheus container.
     extra_hosts:
       - "host.docker.internal:host-gateway"
