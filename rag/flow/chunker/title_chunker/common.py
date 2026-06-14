@@ -120,8 +120,6 @@ class BaseTitleChunker(ABC):
                 }
                 for line in clean_lines
             ]
-        # Return empty array directly for null payload to block invalid branch fallthrough
-        return []
 
         items = self.from_upstream.chunks if self.from_upstream.output_format == "chunks" else self.from_upstream.json_result
         return [

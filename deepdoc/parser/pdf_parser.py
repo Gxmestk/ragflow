@@ -716,7 +716,7 @@ class RAGFlowPdfParser:
                 for b, t in bxs
                 if b[0][0] <= b[1][0] and b[0][1] <= b[-1][1]
             ],
-            self.mean_height[pagenum - 1] / 3,
+            self._safe_mean_height(pagenum) / 3,
         )
 
         # merge chars in the same rect
@@ -789,7 +789,7 @@ class RAGFlowPdfParser:
             del boxes_to_reg[i]["box_image"]
         logging.info(f"__ocr recognize {len(bxs)} boxes cost {timer() - start}s")
         bxs = [b for b in bxs if b["text"]]
-        if self.mean_height[pagenum - 1] == 0:
+        if pagenum - 1 < len(self.mean_height) and self.mean_height[pagenum - 1] == 0:
             self.mean_height[pagenum - 1] = np.median([b["bottom"] - b["top"] for b in bxs])
         self.boxes.append(bxs)
 
@@ -912,7 +912,7 @@ class RAGFlowPdfParser:
                 i += 1
                 continue
 
-            if abs(self._y_dis(b, b_)) < self.mean_height[bxs[i]["page_number"] - 1] / 3:
+            if abs(self._y_dis(b, b_)) < self._safe_mean_height(bxs[i]["page_number"]) / 3:
                 # merge
                 bxs[i]["x1"] = b_["x1"]
                 bxs[i]["top"] = (b["top"] + b_["top"]) / 2
@@ -922,6 +922,18 @@ class RAGFlowPdfParser:
                 continue
             i += 1
         self.boxes = bxs
+
+    def _safe_mean_height(self, page_number):
+        idx = page_number - 1
+        if 0 <= idx < len(self.mean_height) and self.mean_height[idx]:
+            return self.mean_height[idx]
+        return 10
+
+    def _safe_mean_width(self, page_number):
+        idx = page_number - 1
+        if 0 <= idx < len(self.mean_width) and self.mean_width[idx]:
+            return self.mean_width[idx]
+        return 8
 
     def _naive_vertical_merge(self, zoomin=3):
         # bxs = self._assign_column(self.boxes, zoomin)
@@ -938,7 +950,7 @@ class RAGFlowPdfParser:
             if not bxs:
                 continue
 
-            mh = self.mean_height[pg - 1] if self.mean_height else np.median([b["bottom"] - b["top"] for b in bxs]) or 10
+            mh = self._safe_mean_height(pg) if self.mean_height else np.median([b["bottom"] - b["top"] for b in bxs]) or 10
 
             i = 0
             while i + 1 < len(bxs):
@@ -976,8 +988,8 @@ class RAGFlowPdfParser:
                     b.get("layoutno", 0) != b_.get("layoutno", 0),
                     b["text"].strip()[-1] in "。？！?",
                     self.is_english and b["text"].strip()[-1] in ".!?",
-                    b["page_number"] == b_["page_number"] and b_["top"] - b["bottom"] > self.mean_height[b["page_number"] - 1] * 1.5,
-                    b["page_number"] < b_["page_number"] and abs(b["x0"] - b_["x0"]) > self.mean_width[b["page_number"] - 1] * 4,
+                    b["page_number"] == b_["page_number"] and b_["top"] - b["bottom"] > self._safe_mean_height(b["page_number"]) * 1.5,
+                    b["page_number"] < b_["page_number"] and abs(b["x0"] - b_["x0"]) > self._safe_mean_width(b["page_number"]) * 4,
                 ]
                 # split features
                 detach_feats = [b["x1"] < b_["x0"], b["x0"] > b_["x1"]]
@@ -1033,7 +1045,7 @@ class RAGFlowPdfParser:
 
         # count boxes in the same row as a feature
         for i in range(len(self.boxes)):
-            mh = self.mean_height[self.boxes[i]["page_number"] - 1]
+            mh = self._safe_mean_height(self.boxes[i]["page_number"])
             self.boxes[i]["in_row"] = 0
             j = max(0, i - 12)
             while j < min(i + 12, len(self.boxes)):
@@ -1059,8 +1071,8 @@ class RAGFlowPdfParser:
                 while i < min(dp + 12, len(boxes)):
                     ydis = self._y_dis(up, boxes[i])
                     smpg = up["page_number"] == boxes[i]["page_number"]
-                    mh = self.mean_height[up["page_number"] - 1]
-                    mw = self.mean_width[up["page_number"] - 1]
+                    mh = self._safe_mean_height(up["page_number"])
+                    mw = self._safe_mean_width(up["page_number"])
                     if smpg and ydis > mh * 4:
                         break
                     if not smpg and ydis > mh * 16:
@@ -1254,7 +1266,7 @@ class RAGFlowPdfParser:
                 continue
             if bxs[0]["page_number"] - bxs0[0]["page_number"] > 1:
                 continue
-            mh = self.mean_height[bxs[0]["page_number"] - 1]
+            mh = self._safe_mean_height(bxs[0]["page_number"])
             if self._y_dis(bxs0[-1], bxs[0]) > mh * 23:
                 continue
             tables[k0].extend(tables[k])
@@ -1465,7 +1477,7 @@ class RAGFlowPdfParser:
                 return True
             if width(b) > self.page_images[b["page_number"] - 1].size[0] / ZM / 3:
                 return True
-            if b["bottom"] - b["top"] > self.mean_height[b["page_number"] - 1]:
+            if b["bottom"] - b["top"] > self._safe_mean_height(b["page_number"]):
                 return True
             return False
 
@@ -1474,7 +1486,7 @@ class RAGFlowPdfParser:
             lines = []
             widths = []
             pw = self.page_images[boxes[0]["page_number"] - 1].size[0] / ZM
-            mh = self.mean_height[boxes[0]["page_number"] - 1]
+            mh = self._safe_mean_height(boxes[0]["page_number"])
             mj = self.proj_match(boxes[0]["text"]) or boxes[0].get("layout_type", "") == "title"
 
             def dfs(line, st):
