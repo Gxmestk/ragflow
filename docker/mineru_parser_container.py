@@ -203,7 +203,14 @@ class MinerUParser(RAGFlowPdfParser):
     def _is_http_endpoint_valid(url, timeout=5):
         try:
             response = requests.head(url, timeout=timeout, allow_redirects=True)
-            return response.status_code in [200, 301, 302, 307, 308]
+            # A server that returns ANY HTTP response is reachable. vLLM (and
+            # some other servers) return 404/405 on the bare base URL because
+            # there is no handler at "/"; the service is healthy — it just has
+            # no root route. Only connection-level failures (timeout/refused,
+            # caught below) indicate the endpoint is actually down. Treating
+            # 404 as unreachable caused a permanent false-negative on the
+            # MinerU vLLM probe at :8090, forcing the CPU-side API path.
+            return response.status_code in [200, 301, 302, 307, 308, 404, 405]
         except Exception:
             return False
 
@@ -330,9 +337,28 @@ class MinerUParser(RAGFlowPdfParser):
         try:
             with pdfplumber.open(fnm) if isinstance(fnm, (str, PathLike)) else pdfplumber.open(BytesIO(fnm)) as pdf:
                 self.pdf = pdf
-                self.page_images = [p.to_image(resolution=72 * zoomin, antialias=True).original for _, p in
-                                    enumerate(self.pdf.pages[page_from:page_to])]
+                # Render each page independently. A single corrupt/encrypted page
+                # (pypdfium2 PdfiumError "Failed to load page") must not nuke image
+                # generation for every other page — the previous all-or-nothing
+                # list comprehension turned one bad page into 6369 downstream
+                # "crop called without page images" warnings and lost previews
+                # for the whole document. A blank white US-Letter placeholder
+                # (612x792 @ 72dpi) keeps page_idx alignment intact so downstream
+                # crop()/merge code that indexes self.page_images keeps working.
+                self.page_images = []
+                for idx, p in enumerate(self.pdf.pages[page_from:page_to]):
+                    try:
+                        self.page_images.append(p.to_image(resolution=72 * zoomin, antialias=True).original)
+                    except Exception as pe:
+                        self.logger.warning(
+                            f"[MinerU] Failed to render page {page_from + idx + 1} to image ({pe}); "
+                            f"using blank placeholder so indexing can continue."
+                        )
+                        self.page_images.append(Image.new("RGB", (612, 792), "white"))
         except Exception as e:
+            # Whole-document open failure (e.g. pdfium "Unsupported security
+            # scheme" on an encrypted PDF). Text extraction via the MinerU API
+            # backend may still proceed; only chunk image previews are lost.
             self.page_images = None
             self.total_page = 0
             self.logger.exception(e)

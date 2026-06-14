@@ -11,7 +11,12 @@ mysql:
   host: '${MYSQL_HOST:-mysql}'
   port: ${MYSQL_PORT:-3306}
   max_connections: 900
-  stale_timeout: 300
+  # Was 300s — too short for long ingestion tasks (ISO90012015.pdf ran 27 min
+  # and the peewee pool handed out a reaped connection during the final
+  # operation-log write -> "MySQL server has gone away" -> the task was marked
+  # FAILED even though all 1495 chunks were already indexed). Match MySQL's
+  # server-side wait_timeout (28800s) so pool connections aren't reaped mid-task.
+  stale_timeout: 28800
   max_allowed_packet: ${MYSQL_MAX_PACKET:-1073741824}
 minio:
   user: '${MINIO_USER:-rag_flow}'
