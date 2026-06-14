@@ -48,6 +48,11 @@ services:
     networks:
       - ragflow
     restart: unless-stopped
+    # Memory cap: task_executor + the MinerU parse path were ballooning to 10.7G
+    # (known MinerU single-process accumulation). 16g gives ~5G headroom above
+    # the observed parse peak while preventing unbounded growth; on OOM the
+    # `restart: unless-stopped` policy above recovers the container.
+    mem_limit: 16g
     # https://docs.docker.com/engine/daemon/prometheus/#create-a-prometheus-configuration
     # If you use Docker Desktop, the --add-host flag is optional. This flag ensures that the host's internal IP is exposed to the Prometheus container.
     extra_hosts:
