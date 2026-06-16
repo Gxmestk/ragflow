@@ -348,7 +348,15 @@ class MinerUParser(RAGFlowPdfParser):
                 self.page_images = []
                 for idx, p in enumerate(self.pdf.pages[page_from:page_to]):
                     try:
-                        self.page_images.append(p.to_image(resolution=72 * zoomin, antialias=True).original)
+                        # pdfplumber.to_image() -> pypdfium2 native render is NOT thread-safe:
+                        # concurrent renders across task_executor worker threads corrupt pdfium
+                        # state and crash the process (SIGSEGV/SIGABRT; proven 2026-06-16 by a
+                        # 3-PDF concurrent render — 2/2 crash without this lock, 2/2 pass with it).
+                        # A try/except cannot catch a native crash, so the process-global
+                        # pdfplumber lock (defined at module top, never previously wired up)
+                        # serializes this one native call. Render is fast vs OCR/LLM -> nil cost.
+                        with sys.modules[LOCK_KEY_pdfplumber]:
+                            self.page_images.append(p.to_image(resolution=72 * zoomin, antialias=True).original)
                     except Exception as pe:
                         self.logger.warning(
                             f"[MinerU] Failed to render page {page_from + idx + 1} to image ({pe}); "
