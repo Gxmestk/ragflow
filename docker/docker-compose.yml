@@ -44,6 +44,13 @@ services:
       - ./service_conf.yaml.template:/ragflow/conf/service_conf.yaml.template
       - ./entrypoint.sh:/ragflow/entrypoint.sh
       - ./mineru_parser_container.py:/ragflow/deepdoc/parser/mineru_parser.py
+      # --- embedding tokenizer patch: cl100k -> XLM-R for SEA-LION-E5 ---
+      # Bind-mount the patched source so the fix survives container recreate.
+      # (naive.py = TitleChunker chunk sizing; task_executor.py:657,747 = embedding truncate)
+      - ../common/token_utils.py:/ragflow/common/token_utils.py
+      - ../rag/app/naive.py:/ragflow/rag/app/naive.py
+      - ../rag/svr/task_executor.py:/ragflow/rag/svr/task_executor.py
+      - ./sealion_e5_tokenizer.json:/ragflow/conf/sealion_e5_tokenizer.json
     env_file: .env
     networks:
       - ragflow
@@ -98,6 +105,13 @@ services:
       - ./service_conf.yaml.template:/ragflow/conf/service_conf.yaml.template
       - ./entrypoint.sh:/ragflow/entrypoint.sh
       - ./mineru_parser_container.py:/ragflow/deepdoc/parser/mineru_parser.py
+      # --- embedding tokenizer patch: cl100k -> XLM-R for SEA-LION-E5 ---
+      # Bind-mount the patched source so the fix survives container recreate.
+      # (naive.py = TitleChunker chunk sizing; task_executor.py:657,747 = embedding truncate)
+      - ../common/token_utils.py:/ragflow/common/token_utils.py
+      - ../rag/app/naive.py:/ragflow/rag/app/naive.py
+      - ../rag/svr/task_executor.py:/ragflow/rag/svr/task_executor.py
+      - ./sealion_e5_tokenizer.json:/ragflow/conf/sealion_e5_tokenizer.json
     env_file: .env
     networks:
       - ragflow

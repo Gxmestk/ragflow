@@ -84,7 +84,7 @@ from rag.nlp import search, rag_tokenizer, add_positions
 from rag.raptor import (
     RAPTOR_TREE_BUILDER,
 )
-from common.token_utils import num_tokens_from_string, truncate
+from common.token_utils import num_tokens_from_string, truncate, truncate_for_embedding
 from rag.utils.redis_conn import REDIS_CONN, RedisDistributedLock
 from rag.graphrag.utils import chat_limiter
 from common.signal_utils import start_tracemalloc_and_snapshot, stop_tracemalloc
@@ -654,7 +654,7 @@ async def embedding(docs, mdl, parser_config=None, callback=None):
     @timeout(60)
     def batch_encode(txts):
         nonlocal mdl
-        return mdl.encode([truncate(c, mdl.max_length - 10) for c in txts])
+        return mdl.encode([truncate_for_embedding(c, mdl.max_length - 10) for c in txts])
 
     cnts_batches = []
     for i in range(0, len(cnts), settings.EMBEDDING_BATCH_SIZE):
@@ -744,7 +744,7 @@ async def run_dataflow(task: dict):
             @timeout(60)
             def batch_encode(txts):
                 nonlocal embedding_model
-                return embedding_model.encode([truncate(c, embedding_model.max_length - 10) for c in txts])
+                return embedding_model.encode([truncate_for_embedding(c, embedding_model.max_length - 10) for c in txts])
 
             vects_batches = []
             texts = [o.get("questions", o.get("summary", o["text"])) for o in chunks]

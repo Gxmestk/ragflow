@@ -27,7 +27,7 @@ from docx.text.paragraph import Paragraph
 from docx.opc.oxml import parse_xml
 from markdown import markdown
 from PIL import Image
-from common.token_utils import num_tokens_from_string
+from common.token_utils import num_tokens_from_string, num_tokens_from_string_for_embedding
 
 from common.constants import LLMType, MAXIMUM_PAGE_NUMBER
 from api.db.services.llm_service import LLMBundle
@@ -1077,7 +1077,7 @@ def chunk(filename, binary=None, from_page=0, to_page=MAXIMUM_PAGE_NUMBER, lang=
 
         for idx, sec in enumerate(sections):
             text = sec[0] if isinstance(sec, tuple) else sec
-            sec_tokens = num_tokens_from_string(text)
+            sec_tokens = num_tokens_from_string_for_embedding(text)
             sec_image = section_images[idx] if section_images and idx < len(section_images) else None
 
             if current_text and current_tokens + sec_tokens > chunk_limit:
@@ -1089,7 +1089,7 @@ def chunk(filename, binary=None, from_page=0, to_page=MAXIMUM_PAGE_NUMBER, lang=
                     if overlap_len > 0:
                         overlap_part = current_text[-overlap_len:]
                 current_text = overlap_part
-                current_tokens = num_tokens_from_string(current_text)
+                current_tokens = num_tokens_from_string_for_embedding(current_text)
                 current_image = current_image if overlap_part else None
 
             if current_text:
