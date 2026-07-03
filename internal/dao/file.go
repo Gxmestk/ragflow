@@ -243,6 +243,20 @@ func (dao *FileDAO) ListAllFilesByParentID(parentID string) ([]*entity.File, err
 	return files, err
 }
 
+// ListNonFolderByParentID lists non-folder files directly under a parent folder.
+func (dao *FileDAO) ListNonFolderByParentID(parentID string) ([]*entity.File, error) {
+	var files []*entity.File
+	err := DB.Where("parent_id = ? AND id != ? AND type != ?", parentID, parentID, "folder").Find(&files).Error
+	return files, err
+}
+
+// ListFolderByParentID lists sub-folders directly under a parent folder.
+func (dao *FileDAO) ListFolderByParentID(parentID string) ([]*entity.File, error) {
+	var files []*entity.File
+	err := DB.Where("parent_id = ? AND type = ?", parentID, "folder").Find(&files).Error
+	return files, err
+}
+
 // GetByParentIDAndName gets file by parent folder ID and name
 func (dao *FileDAO) GetByParentIDAndName(parentID, name string) (*entity.File, error) {
 	var file entity.File
@@ -300,7 +314,7 @@ func (dao *FileDAO) IsParentFolderExist(parentID string) bool {
 }
 
 // Query retrieves files by conditions
-func (dao *FileDAO) Query(name string, parentID string) []*entity.File {
+func (dao *FileDAO) Query(name string, parentID string, tenantID string) []*entity.File {
 	var files []*entity.File
 	query := DB.Model(&entity.File{})
 	if name != "" {
@@ -308,6 +322,9 @@ func (dao *FileDAO) Query(name string, parentID string) []*entity.File {
 	}
 	if parentID != "" {
 		query = query.Where("parent_id = ?", parentID)
+	}
+	if tenantID != "" {
+		query = query.Where("tenant_id = ?", tenantID)
 	}
 	query.Find(&files)
 	return files

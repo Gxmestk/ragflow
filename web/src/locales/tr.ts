@@ -79,6 +79,7 @@ export default {
       selected: 'Seçildi',
       seeAll: 'Tümünü gör',
       bulkOperate: 'Toplu işlem',
+      owner: 'Sahip',
     },
     login: {
       loginTitle: 'Hesabınıza giriş yapın',
@@ -383,7 +384,6 @@ Prosedürel Bellek: Öğrenilen beceriler, alışkanlıklar ve otomatik prosedü
       metadata: {
         fields: 'alanlar',
         selectFiles: '{{count}} dosya seçildi',
-        type: 'Tür',
         fieldNameInvalid: 'Alan adı yalnızca harf veya alt çizgi içerebilir.',
         builtIn: 'Yerleşik',
         generation: 'Oluşturma',
@@ -413,6 +413,7 @@ Prosedürel Bellek: Öğrenilen beceriler, alışkanlıklar ve otomatik prosedü
         value: 'Değer',
         action: 'İşlem',
         field: 'Alan',
+        type: 'Tür',
         description: 'Açıklama',
         fieldName: 'Alan adı',
         editMetadata: 'Meta veriyi düzenle',
@@ -899,6 +900,8 @@ Bu otomatik etiketleme özelliği, mevcut datasete alanına özgü bilgi katman�
       size: 'Boyut',
       uploadedTime: 'Yükleme zamanı',
       chunk: 'Parça',
+      createChunk: 'Parça Oluştur',
+      editChunk: 'Parçayı Düzenle',
       bulk: 'Toplu',
       selectAll: 'Tümünü seç',
       enabledSelected: 'Seçilenleri etkinleştir',
@@ -1119,6 +1122,12 @@ Bu otomatik etiketleme özelliği, mevcut datasete alanına özgü bilgi katman�
       tocEnhanceTip: ` Belgenin ayrıştırılması sırasında içindekiler tablosu bilgisi oluşturuldu (Genel yöntemindeki 'İçindekiler Tablosu Çıkarmayı Etkinleştir' seçeneğine bakın). Bu, büyük modelin kullanıcının sorgusuyla ilgili içindekiler öğelerini döndürmesine olanak tanır, böylece bu öğeleri kullanarak ilgili parçaları alır ve sıralama işleminde bu parçalara ağırlık uygular. Bu yaklaşım, kitaplarda insan bilgi arama davranışını taklit eder.`,
       batchDeleteSessions: 'Toplu sil',
       deleteSelectedConfirm: 'Seçilen {{count}} oturum(lar) silinsin mi?',
+      showChunkMetadata: 'Parça meta verilerini göster',
+      showChunkMetadataTip:
+        'Alınan metin parçalarının yanında belge meta verilerini (başlık, sayfa numarası, yükleme tarihi vb.) görüntüle',
+      metadataFields: 'Meta veri alanları',
+      metadataFieldsTip:
+        'Her parçayla birlikte görüntülenecek meta veri alanlarını seçin',
     },
     setting: {
       Verify: 'Doğrula',
@@ -2598,6 +2607,8 @@ Temel Talimatlar:
       success: 'Başarılı',
       failed: 'Başarısız',
       logTitle: 'Başlık',
+      tags: 'Etiketler',
+      canvasCategory: 'Kanvas kategorisi',
     },
     llmTools: {
       bad_calculator: {
@@ -2656,6 +2667,7 @@ Temel Talimatlar:
       okText: 'Kaydet',
       cancelText: 'İptal',
       chooseDataset: 'Lütfen önce bir dataset seçin',
+      selectLocalePlaceholder: 'Dil seçin',
     },
     language: {
       english: 'İngilizce',

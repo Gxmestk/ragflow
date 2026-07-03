@@ -18,6 +18,7 @@ import os
 import re
 import time
 from collections import defaultdict
+from copy import deepcopy
 from hashlib import md5
 from typing import Any, Callable, Set, Tuple
 
@@ -167,6 +168,7 @@ def dict_has_keys_with_types(data: dict, expected_fields: list[tuple[str, type]]
 
 
 def get_llm_cache(llmnm, txt, history, genconf):
+    """Return a cached LLM completion for the given model/text/history/config, or None on miss."""
     hasher = xxhash.xxh64()
     hasher.update((str(llmnm)+str(txt)+str(history)+str(genconf)).encode("utf-8"))
 
@@ -178,6 +180,7 @@ def get_llm_cache(llmnm, txt, history, genconf):
 
 
 def set_llm_cache(llmnm, txt, v, history, genconf):
+    """Store an LLM completion *v* in Redis keyed by a hash of model/text/history/config."""
     hasher = xxhash.xxh64()
     hasher.update((str(llmnm)+str(txt)+str(history)+str(genconf)).encode("utf-8"))
     k = hasher.hexdigest()
@@ -185,6 +188,7 @@ def set_llm_cache(llmnm, txt, v, history, genconf):
 
 
 def get_embed_cache(llmnm, txt):
+    """Return a cached embedding vector (numpy array) for *llmnm*/*txt*, or None on miss."""
     hasher = xxhash.xxh64()
     hasher.update(str(llmnm).encode("utf-8"))
     hasher.update(str(txt).encode("utf-8"))
@@ -197,6 +201,7 @@ def get_embed_cache(llmnm, txt):
 
 
 def set_embed_cache(llmnm, txt, arr):
+    """Store embedding *arr* in Redis for the given model name and input text."""
     hasher = xxhash.xxh64()
     hasher.update(str(llmnm).encode("utf-8"))
     hasher.update(str(txt).encode("utf-8"))
@@ -206,7 +211,35 @@ def set_embed_cache(llmnm, txt, arr):
     REDIS_CONN.set(k, arr.encode("utf-8"), 24 * 3600)
 
 
+def _batch_embed_cache_misses(llmnm: str, keys: list) -> "list[bool]":
+    """Return a boolean miss-mask for *keys* using a single MGET round-trip.
+
+    Avoids per-item REDIS_CONN.get() calls (which would block the event loop
+    when called from an async context) by issuing one batched MGET instead.
+    """
+    if not keys:
+        return []
+    hashes = []
+    for key in keys:
+        h = xxhash.xxh64()
+        h.update(str(llmnm).encode("utf-8"))
+        h.update(str(key).encode("utf-8"))
+        hashes.append(h.hexdigest())
+    return [v is None for v in REDIS_CONN.mget(hashes)]
+
+
+def _write_embed_cache_batch(llmnm: str, keys: list, embeddings) -> None:
+    """Write a batch of embeddings to the Redis embed cache synchronously.
+
+    Intended for use with thread_pool_exec so that the synchronous Redis SET
+    calls do not block the event loop.
+    """
+    for key, ebd in zip(keys, embeddings):
+        set_embed_cache(llmnm, key, ebd)
+
+
 def get_tags_from_cache(kb_ids):
+    """Return cached tag data for the given kb_ids from Redis, or None on miss."""
     hasher = xxhash.xxh64()
     hasher.update(str(kb_ids).encode("utf-8"))
 
@@ -218,6 +251,7 @@ def get_tags_from_cache(kb_ids):
 
 
 def set_tags_to_cache(kb_ids, tags):
+    """Persist tag data for *kb_ids* in Redis."""
     hasher = xxhash.xxh64()
     hasher.update(str(kb_ids).encode("utf-8"))
 
@@ -262,6 +296,7 @@ def tidy_graph(graph: nx.Graph, callback, check_attribute: bool = True):
 
 
 def get_from_to(node1, node2):
+    """Return a canonical (lesser, greater) node pair for consistent undirected edge keying."""
     if node1 < node2:
         return (node1, node2)
     else:
@@ -302,6 +337,7 @@ def graph_merge(g1: nx.Graph, g2: nx.Graph, change: GraphChange):
 
 
 def compute_args_hash(*args):
+    """Return a hex MD5 digest of the string representation of *args* (used as a cache key)."""
     return md5(str(args).encode()).hexdigest()
 
 
@@ -309,6 +345,7 @@ def handle_single_entity_extraction(
     record_attributes: list[str],
     chunk_key: str,
 ):
+    """Parse one entity record from LLM output and return a node-attribute dict, or None."""
     if len(record_attributes) < 4 or record_attributes[0] != '"entity"':
         return None
     # add this record as a node in the G
@@ -327,6 +364,7 @@ def handle_single_entity_extraction(
 
 
 def handle_single_relationship_extraction(record_attributes: list[str], chunk_key: str):
+    """Parse one relationship record from LLM output and return an edge-attribute dict, or None."""
     if len(record_attributes) < 5 or record_attributes[0] != '"relationship"':
         return None
     # add this record as edge
@@ -350,6 +388,7 @@ def handle_single_relationship_extraction(record_attributes: list[str], chunk_ke
 
 
 def pack_user_ass_to_openai_messages(*args: str):
+    """Interleave *args* as alternating user/assistant messages in OpenAI chat format."""
     roles = ["user", "assistant"]
     return [{"role": roles[i % 2], "content": content} for i, content in enumerate(args)]
 
@@ -363,14 +402,17 @@ def split_string_by_multi_markers(content: str, markers: list[str]) -> list[str]
 
 
 def is_float_regex(value):
+    """Return True if *value* is a string representation of a float or integer."""
     return bool(re.match(r"^[-+]?[0-9]*\.?[0-9]+$", value))
 
 
 def chunk_id(chunk):
+    """Return a deterministic hex ID for *chunk* derived from its content and kb_id."""
     return xxhash.xxh64((chunk["content_with_weight"] + chunk["kb_id"]).encode("utf-8")).hexdigest()
 
 
-async def graph_node_to_chunk(kb_id, embd_mdl, ent_name, meta, chunks):
+async def graph_node_to_chunk(kb_id, embd_mdl, ent_name, meta, chunks, nhop_neighbors=None):
+    """Convert a graph node (entity) to an embeddable chunk and append it to *chunks*."""
     global chat_limiter
     enable_timeout_assertion = os.environ.get("ENABLE_TIMEOUT_ASSERTION")
     chunk = {
@@ -383,6 +425,11 @@ async def graph_node_to_chunk(kb_id, embd_mdl, ent_name, meta, chunks):
         "content_with_weight": json.dumps(meta, ensure_ascii=False),
         "content_ltks": rag_tokenizer.tokenize(meta["description"]),
         "source_id": meta["source_id"],
+        # pagerank drives the P(E|Q) = pagerank * sim ranking in KGSearch; the
+        # n-hop neighbour paths feed its relation-enrichment step.  Both are read
+        # back as `rank_flt` / `n_hop_with_weight` in rag/graphrag/search.py.
+        "rank_flt": float(meta.get("pagerank", 0) or 0),
+        "n_hop_with_weight": json.dumps(nhop_neighbors or [], ensure_ascii=False),
         "kb_id": kb_id,
         "available_int": 0,
     }
@@ -404,6 +451,7 @@ async def graph_node_to_chunk(kb_id, embd_mdl, ent_name, meta, chunks):
 
 @timeout(3, 3)
 async def get_relation(tenant_id, kb_id, from_ent_name, to_ent_name, size=1):
+    """Retrieve edge metadata between entity names from the document store."""
     ents = from_ent_name
     if isinstance(ents, str):
         ents = [from_ent_name]
@@ -425,6 +473,7 @@ async def get_relation(tenant_id, kb_id, from_ent_name, to_ent_name, size=1):
 
 
 async def graph_edge_to_chunk(kb_id, embd_mdl, from_ent_name, to_ent_name, meta, chunks):
+    """Convert a graph edge (relation) to an embeddable chunk and append it to *chunks*."""
     enable_timeout_assertion = os.environ.get("ENABLE_TIMEOUT_ASSERTION")
     chunk = {
         "id": get_uuid(),
@@ -460,6 +509,7 @@ async def graph_edge_to_chunk(kb_id, embd_mdl, from_ent_name, to_ent_name, meta,
 
 
 async def does_graph_contains(tenant_id, kb_id, doc_id):
+    """Return True if *doc_id* is recorded as a source document in the stored graph for *kb_id*."""
     # Get doc_ids of graph
     fields = ["source_id"]
     condition = {
@@ -479,6 +529,7 @@ async def does_graph_contains(tenant_id, kb_id, doc_id):
 
 
 async def get_graph_doc_ids(tenant_id, kb_id) -> list[str]:
+    """Return the list of document IDs referenced by the stored graph for *kb_id*."""
     conds = {"fields": ["source_id"], "removed_kwd": "N", "size": 1, "knowledge_graph_kwd": ["graph"]}
     res = await settings.retriever.search(conds, search.index_name(tenant_id), [kb_id])
     doc_ids = []
@@ -490,6 +541,7 @@ async def get_graph_doc_ids(tenant_id, kb_id) -> list[str]:
 
 
 async def get_graph(tenant_id, kb_id, exclude_rebuild=None):
+    """Load the knowledge-graph for *kb_id* from the document store, rebuilding if marked removed."""
     conds = {"fields": ["content_with_weight", "removed_kwd", "source_id"], "size": 1, "knowledge_graph_kwd": ["graph"]}
     res = await settings.retriever.search(conds, search.index_name(tenant_id), [kb_id])
     if not res.total == 0:
@@ -509,6 +561,12 @@ async def get_graph(tenant_id, kb_id, exclude_rebuild=None):
 
 
 async def set_graph(tenant_id: str, kb_id: str, embd_mdl, graph: nx.Graph, change: GraphChange, callback):
+    """Persist a knowledge-graph snapshot to the document store.
+
+    Converts *graph* nodes and edges to embedding chunks, pre-warms the Redis
+    embed cache for all cache-miss entities/relations in bulk before spawning
+    per-item tasks, then atomically replaces the old graph chunks in the store.
+    """
     global chat_limiter
     start = asyncio.get_running_loop().time()
 
@@ -546,11 +604,48 @@ async def set_graph(tenant_id: str, kb_id: str, embd_mdl, graph: nx.Graph, chang
             }
         )
 
+    # ── batch pre-warm entity embeddings ───────────────────────────────────────
+    # Without this, set_graph spawns one asyncio task per entity, each calling
+    # embd_mdl.encode([single_name]).  For 17 k+ nodes that is 17 k round-trips.
+    # Pre-warming the cache here collapses N calls to ceil(N/_INSERT_BULK_SIZE).
+    _node_list = list(change.added_updated_nodes)
+    _node_misses = await thread_pool_exec(
+        _batch_embed_cache_misses, embd_mdl.llm_name, _node_list
+    )
+    _uncached_node_names = [n for n, miss in zip(_node_list, _node_misses) if miss]
+    logging.debug(
+        "set_graph node pre-warm: %d nodes, %d cache misses",
+        len(_node_list), len(_uncached_node_names),
+    )
+    if _uncached_node_names:
+        _enable_ta = os.environ.get("ENABLE_TIMEOUT_ASSERTION")
+        _timeout = 3 if _enable_ta else 30000000
+        for _i in range(0, len(_uncached_node_names), _INSERT_BULK_SIZE):
+            _batch = _uncached_node_names[_i : _i + _INSERT_BULK_SIZE]
+            async with chat_limiter:
+                _ebds, _ = await asyncio.wait_for(
+                    thread_pool_exec(embd_mdl.encode, _batch),
+                    timeout=_timeout,
+                )
+            await thread_pool_exec(_write_embed_cache_batch, embd_mdl.llm_name, _batch, _ebds)
+            logging.debug(
+                "set_graph node pre-warm: wrote batch %d/%d (%d items)",
+                _i // _INSERT_BULK_SIZE + 1,
+                (len(_uncached_node_names) + _INSERT_BULK_SIZE - 1) // _INSERT_BULK_SIZE,
+                len(_batch),
+            )
+        if callback:
+            callback(msg=f"Batch-embedded {len(_uncached_node_names)} entity names "
+                         f"({(len(_uncached_node_names) + _INSERT_BULK_SIZE - 1) // _INSERT_BULK_SIZE} "
+                         f"batches of {_INSERT_BULK_SIZE}).")
+    # ── end batch pre-warm ──────────────────────────────────────────────────────
+
     tasks = []
     for ii, node in enumerate(change.added_updated_nodes):
         node_attrs = graph.nodes[node]
+        nhop_neighbors = n_neighbor(graph, node)
         tasks.append(asyncio.create_task(
-            graph_node_to_chunk(kb_id, embd_mdl, node, node_attrs, chunks)
+            graph_node_to_chunk(kb_id, embd_mdl, node, node_attrs, chunks, nhop_neighbors)
         ))
         if ii % 100 == 9 and callback:
             callback(msg=f"Get embedding of nodes: {ii}/{len(change.added_updated_nodes)}")
@@ -562,6 +657,50 @@ async def set_graph(tenant_id: str, kb_id: str, embd_mdl, graph: nx.Graph, chang
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         raise
+
+    # ── batch pre-warm edge embeddings ─────────────────────────────────────────
+    # Mirror of the node pre-warm above for relation chunks.
+    # Cache key  = "A->B"  (matches graph_edge_to_chunk lookup key)
+    # Encoded text = "A->B: <description>"  (matches graph_edge_to_chunk encode text)
+    _all_edge_data = [
+        (_fn, _tn, graph.get_edge_data(_fn, _tn))
+        for _fn, _tn in change.added_updated_edges
+    ]
+    _all_edge_data = [(f, t, a) for f, t, a in _all_edge_data if a]
+    _edge_lookup_keys = [f"{f}->{t}" for f, t, _ in _all_edge_data]
+    _edge_misses = await thread_pool_exec(
+        _batch_embed_cache_misses, embd_mdl.llm_name, _edge_lookup_keys
+    ) if _all_edge_data else []
+    _uncached_edge_items = [item for item, miss in zip(_all_edge_data, _edge_misses) if miss]
+    logging.debug(
+        "set_graph edge pre-warm: %d edges, %d cache misses",
+        len(_all_edge_data), len(_uncached_edge_items),
+    )
+    if _uncached_edge_items:
+        _edge_keys  = [f"{f}->{t}" for f, t, _ in _uncached_edge_items]
+        _edge_texts = [f"{f}->{t}: {a['description']}" for f, t, a in _uncached_edge_items]
+        _enable_ta = os.environ.get("ENABLE_TIMEOUT_ASSERTION")
+        _timeout = 3 if _enable_ta else 30000000
+        for _i in range(0, len(_edge_texts), _INSERT_BULK_SIZE):
+            _btexts = _edge_texts[_i : _i + _INSERT_BULK_SIZE]
+            _bkeys  = _edge_keys [_i : _i + _INSERT_BULK_SIZE]
+            async with chat_limiter:
+                _ebds, _ = await asyncio.wait_for(
+                    thread_pool_exec(embd_mdl.encode, _btexts),
+                    timeout=_timeout,
+                )
+            await thread_pool_exec(_write_embed_cache_batch, embd_mdl.llm_name, _bkeys, _ebds)
+            logging.debug(
+                "set_graph edge pre-warm: wrote batch %d/%d (%d items)",
+                _i // _INSERT_BULK_SIZE + 1,
+                (len(_uncached_edge_items) + _INSERT_BULK_SIZE - 1) // _INSERT_BULK_SIZE,
+                len(_btexts),
+            )
+        if callback:
+            callback(msg=f"Batch-embedded {len(_uncached_edge_items)} edge descriptions "
+                         f"({(len(_uncached_edge_items) + _INSERT_BULK_SIZE - 1) // _INSERT_BULK_SIZE} "
+                         f"batches of {_INSERT_BULK_SIZE}).")
+    # ── end batch pre-warm ──────────────────────────────────────────────────────
 
     tasks = []
     for ii, (from_node, to_node) in enumerate(change.added_updated_edges):
@@ -656,6 +795,7 @@ async def set_graph(tenant_id: str, kb_id: str, embd_mdl, graph: nx.Graph, chang
 
 
 def is_continuous_subsequence(subseq, seq):
+    """Return True if *subseq* appears as a contiguous sub-path within tuple *seq*."""
     def find_all_indexes(tup, value):
         indexes = []
         start = 0
@@ -677,6 +817,7 @@ def is_continuous_subsequence(subseq, seq):
 
 
 def merge_tuples(list1, list2):
+    """Extend each path tuple in *list1* by matching continuations found in *list2*."""
     result = []
     for tup in list1:
         last_element = tup[-1]
@@ -697,7 +838,43 @@ def merge_tuples(list1, list2):
     return result
 
 
+def n_neighbor(graph: nx.Graph, node, n_hop: int = 2):
+    """Enumerate paths of up to ``n_hop`` edges starting at ``node`` together
+    with the edge weight along each step.
+
+    Returns a list of ``{"path": (n0, n1, ...), "weights": [w0, w1, ...]}``
+    dicts (``len(weights) == len(path) - 1``).  This is the structure consumed
+    by :class:`rag.graphrag.search.KGSearch` for n-hop relation enrichment and
+    is stored per entity chunk as ``n_hop_with_weight``.
+    """
+    source_edge = list(graph.edges(node))
+    if not source_edge:
+        return []
+    count = 1
+    while count < n_hop:
+        count += 1
+        sc_edge = deepcopy(source_edge)
+        source_edge = []
+        for pair in sc_edge:
+            append_edge = list(graph.edges(pair[-1]))
+            for tuples in merge_tuples([pair], append_edge):
+                source_edge.append(tuples)
+    wts = nx.get_edge_attributes(graph, "weight")
+    nbrs = []
+    for path in source_edge:
+        nbr = {"path": path, "weights": []}
+        for i in range(len(path) - 1):
+            f, t = path[i], path[i + 1]
+            w = wts.get((f, t))
+            if w is None:
+                w = wts.get((t, f), 0)
+            nbr["weights"].append(w)
+        nbrs.append(nbr)
+    return nbrs
+
+
 async def get_entity_type2samples(idxnms, kb_ids: list):
+    """Return a mapping of entity type → sample entity names fetched from the document store."""
     es_res = await settings.retriever.search({"knowledge_graph_kwd": "ty2ents", "kb_id": kb_ids, "size": 10000, "fields": ["content_with_weight"]},idxnms,kb_ids)
 
     res = defaultdict(list)
@@ -716,6 +893,7 @@ async def get_entity_type2samples(idxnms, kb_ids: list):
 
 
 def flat_uniq_list(arr, key):
+    """Flatten and deduplicate the values at *key* across a list of dicts."""
     res = []
     for a in arr:
         a = a[key]
@@ -727,6 +905,7 @@ def flat_uniq_list(arr, key):
 
 
 async def rebuild_graph(tenant_id, kb_id, exclude_rebuild=None):
+    """Reconstruct the full knowledge-graph for *kb_id* from its stored subgraph chunks."""
     graph = nx.Graph()
     flds = ["knowledge_graph_kwd", "content_with_weight", "source_id"]
     bs = 256
