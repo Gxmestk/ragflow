@@ -50,6 +50,14 @@ services:
       - ../common/token_utils.py:/ragflow/common/token_utils.py
       - ../rag/app/naive.py:/ragflow/rag/app/naive.py
       - ../rag/svr/task_executor.py:/ragflow/rag/svr/task_executor.py
+      # --- TitleChunker dead-code + DeepDOC mean_height bounds (commit b729c7ec0) ---
+      # These reverted on a container recreate (were only docker-cp'd, not mounted):
+      # TitleChunker emitted 0 chunks after a MinerU "json" parse (a dead early
+      # `return []` in extract_line_records made the json/chunks branch unreachable),
+      # and DeepDOC pdf_parser crashed on a mean_height out-of-range access. Mount them
+      # like the other patched files above so the fix survives the next recreate.
+      - ../rag/flow/chunker/title_chunker/common.py:/ragflow/rag/flow/chunker/title_chunker/common.py
+      - ../deepdoc/parser/pdf_parser.py:/ragflow/deepdoc/parser/pdf_parser.py
       - ./sealion_e5_tokenizer.json:/ragflow/conf/sealion_e5_tokenizer.json
     env_file: .env
     networks:
@@ -111,6 +119,14 @@ services:
       - ../common/token_utils.py:/ragflow/common/token_utils.py
       - ../rag/app/naive.py:/ragflow/rag/app/naive.py
       - ../rag/svr/task_executor.py:/ragflow/rag/svr/task_executor.py
+      # --- TitleChunker dead-code + DeepDOC mean_height bounds (commit b729c7ec0) ---
+      # These reverted on a container recreate (were only docker-cp'd, not mounted):
+      # TitleChunker emitted 0 chunks after a MinerU "json" parse (a dead early
+      # `return []` in extract_line_records made the json/chunks branch unreachable),
+      # and DeepDOC pdf_parser crashed on a mean_height out-of-range access. Mount them
+      # like the other patched files above so the fix survives the next recreate.
+      - ../rag/flow/chunker/title_chunker/common.py:/ragflow/rag/flow/chunker/title_chunker/common.py
+      - ../deepdoc/parser/pdf_parser.py:/ragflow/deepdoc/parser/pdf_parser.py
       - ./sealion_e5_tokenizer.json:/ragflow/conf/sealion_e5_tokenizer.json
     env_file: .env
     networks:
